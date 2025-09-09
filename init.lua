@@ -91,7 +91,7 @@ vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 
 -- Set to true if you have a Nerd Font installed and selected in the terminal
-vim.g.have_nerd_font = false
+vim.g.have_nerd_font = true
 
 -- [[ Setting options ]]
 -- See `:help vim.o`
@@ -175,6 +175,8 @@ vim.keymap.set('n', '<Esc>', '<cmd>nohlsearch<CR>')
 
 -- Diagnostic keymaps
 vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagnostic [Q]uickfix list' })
+-- Custom Diagnostic keymaps
+vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float, { desc = 'Show line diagnostic' })
 
 -- Exit terminal mode in the builtin terminal with a shortcut that is a bit easier
 -- for people to discover. Otherwise, you normally need to press <C-\><C-n>, which
@@ -198,6 +200,8 @@ vim.keymap.set('n', '<C-h>', '<C-w><C-h>', { desc = 'Move focus to the left wind
 vim.keymap.set('n', '<C-l>', '<C-w><C-l>', { desc = 'Move focus to the right window' })
 vim.keymap.set('n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
 vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
+
+vim.keymap.set('n', '<leader>tr', ':NvimTreeToggle<CR>', { desc = 'Toggle NvimTree' })
 
 -- NOTE: Some terminals have colliding keymaps or are not able to send distinct keycodes
 -- vim.keymap.set("n", "<C-S-h>", "<C-w>H", { desc = "Move window to the left" })
@@ -297,6 +301,32 @@ require('lazy').setup({
   --
   -- Then, because we use the `opts` key (recommended), the configuration runs
   -- after the plugin has been loaded as `require(MODULE).setup(opts)`.
+  --
+  {
+    'nvim-tree/nvim-tree.lua',
+    config = function()
+      return require('nvim-tree').setup {
+        filters = {
+          dotfiles = false,
+        },
+        update_focused_file = {
+          enable = true,
+        },
+        view = { adaptive_size = true },
+      }
+    end,
+  },
+
+  {
+    'natecraddock/workspaces.nvim',
+    config = function()
+      return require('workspaces').setup {
+        hooks = {
+          open = { 'Telescope find_files' },
+        },
+      }
+    end,
+  },
 
   { -- Useful plugin to show you pending keybinds.
     'folke/which-key.nvim',
@@ -482,7 +512,17 @@ require('lazy').setup({
       -- Automatically install LSPs and related tools to stdpath for Neovim
       -- Mason must be loaded before its dependents so we need to set it up here.
       -- NOTE: `opts = {}` is the same as calling `require('mason').setup({})`
-      { 'mason-org/mason.nvim', opts = {} },
+      {
+        'mason-org/mason.nvim',
+        opts = {
+          ensure_installed = {
+            'sonarlint-language-server',
+            'jdtls',
+            'java-test', -- Optional, for running Java tests
+            'java-debug-adapter', -- Optional, for Java debugging
+          },
+        },
+      },
       'mason-org/mason-lspconfig.nvim',
       'WhoIsSethDaniel/mason-tool-installer.nvim',
 
@@ -681,8 +721,7 @@ require('lazy').setup({
         --    https://github.com/pmizio/typescript-tools.nvim
         --
         -- But for many setups, the LSP (`ts_ls`) will work just fine
-        -- ts_ls = {},
-        --
+        ts_ls = {},
 
         lua_ls = {
           -- cmd = { ... },
@@ -716,6 +755,8 @@ require('lazy').setup({
       local ensure_installed = vim.tbl_keys(servers or {})
       vim.list_extend(ensure_installed, {
         'stylua', -- Used to format Lua code
+        'prettierd',
+        'eslint_d',
       })
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 
@@ -724,6 +765,10 @@ require('lazy').setup({
         automatic_installation = false,
         handlers = {
           function(server_name)
+            if server_name == 'jdtls' then
+              return false -- Very important: nvim-jdtls will handle this.
+            end
+
             local server = servers[server_name] or {}
             -- This handles overriding only values explicitly passed
             -- by the server configuration above. Useful when disabling
@@ -733,6 +778,170 @@ require('lazy').setup({
           end,
         },
       }
+    end,
+  },
+
+  {
+    'mfussenegger/nvim-jdtls',
+    ft = { 'java' }, -- Load only for Java files
+    dependencies = {
+      'williamboman/mason.nvim', -- Ensure Mason is a dependency
+    },
+    config = function()
+      local workspace_dir = vim.fn.stdpath 'data' .. '/jdtls-workspace/' .. vim.fn.fnamemodify(vim.fn.getcwd(), ':p:h:t')
+
+      local config = {
+        cmd = {
+          -- 💀
+          '/opt/homebrew/Cellar/openjdk@21/21.0.8/libexec/openjdk.jdk/Contents/Home/bin/java',
+          '-Declipse.application=org.eclipse.jdt.ls.core.id1',
+          '-Dosgi.bundles.defaultStartLevel=4',
+          '-Declipse.product=org.eclipse.jdt.ls.core.product',
+          '-Dlog.protocol=true',
+          '-Dlog.level=ALL',
+          '-Xmx1g',
+          '--add-modules=ALL-SYSTEM',
+          '--add-opens',
+          'java.base/java.util=ALL-UNNAMED',
+          '--add-opens',
+          'java.base/java.lang=ALL-UNNAMED',
+
+          -- 💀
+          '-jar',
+          vim.fn.expand '$MASON/share/jdtls/plugins/org.eclipse.equinox.launcher_1.7.0.v20250519-0528.jar',
+
+          -- 💀
+          '-configuration',
+          vim.fn.expand '$MASON/share/jdtls/config/arm',
+
+          -- 💀
+          '-data',
+          workspace_dir,
+        },
+
+        root_dir = vim.fs.root(0, { '.git', 'mvnw', 'gradlew' }),
+
+        settings = {
+          java = {
+            configuration = {
+              runtimes = {
+                {
+                  name = 'JavaSE-17',
+                  path = '/opt/homebrew/Cellar/openjdk@17/17.0.16/libexec/openjdk.jdk/Contents/Home/',
+                  default = true,
+                },
+                -- {
+                --   name = 'JavaSE-21',
+                --   path = '/opt/homebrew/opt/openjdk@21/',
+                -- },
+                -- {
+                --   name = 'JavaSE-24',
+                --   path = '/opt/homebrew/opt/openjdk@24/',
+                -- },
+              },
+            },
+            -- sources = {
+            --   organizeImports = {
+            --     importOrder = '/Users/harry.anderson/Projects/sonar-developer-toolset/eclipse/sonar.importorder',
+            --   },
+            -- },
+            format = {
+              settings = {
+                -- url = vim.fn.expand '~/Projects/sonar-developer-toolset/eclipse/sonar-formatter.xml',
+                url = '/Users/harry.anderson/Projects/sonar-developer-toolset/eclipse/sonar-formatter.xml',
+                -- profile = 'SonarQube',
+              },
+              -- options = {
+              --   tabSize = 2,
+              --   insertSpaces = true,
+              --   trimTrailingWhitespace = true,
+              -- },
+            },
+            -- completion = {
+            --   importOrder = '/Users/harry.anderson/Projects/sonar-developer-toolset/eclipse/sonar.importorder',
+            -- },
+            completion = {
+              importOrder = {
+                '', -- regular imports first
+                '#', -- static imports second
+              },
+            },
+          },
+        },
+
+        init_options = {
+          -- settings = {
+          --   ['java.completion.importOrder'] = '/Users/harry.anderson/Projects/sonar-developer-toolset/eclipse/sonar.importorder',
+          -- },
+          extendedClientCapabilities = {
+            classFileContentsSupport = true,
+            -- generateToStringPromptSupport = true,
+            -- hashCodeEqualsPromptSupport = true,
+            -- advancedExtractRefactoringSupport = true,
+            advancedOrganizeImportsSupport = true, -- This might help with import ordering!
+          },
+        },
+
+        timeout_ms = 10000,
+      }
+
+      vim.api.nvim_create_autocmd('BufWritePre', {
+        pattern = '*.java',
+        callback = function()
+          vim.lsp.buf.code_action {
+            context = { only = { 'source.organizeImports' } },
+            apply = true,
+          }
+        end,
+      })
+
+      require('jdtls').start_or_attach(config)
+    end,
+  },
+
+  {
+    'https://gitlab.com/schrieveslaach/sonarlint.nvim',
+    dependencies = {
+      'nvim-treesitter/nvim-treesitter', -- For better syntax parsing
+      'neovim/nvim-lspconfig', -- Required for LSP setup
+      'mfussenegger/nvim-jdtls', -- Highly recommended for Java projects with SonarLint
+    },
+    ft = { 'java' }, -- Only load for Java files
+    opts = {
+      server = {
+        cmd = {
+          'sonarlint-language-server',
+          '-stdio',
+          '-analyzers',
+          -- vim.fn.expand '~/.local/share/nvim/mason/packages/sonarlint-language-server/extension/analyzers/sonarjava.jar',
+          vim.fn.expand '$MASON/share/sonarlint-analyzers/sonarjava.jar',
+        },
+      },
+      filetypes = {
+        'java',
+      },
+      resolve_gradle_paths = {
+        enabled = true,
+      },
+    },
+    config = function(_, opts)
+      require('sonarlint').setup(opts)
+      -- require('mason-lspconfig').setup {
+      --   handlers = {
+      --     -- ... existing handlers ...
+      --     function(server_name)
+      --       if server_name == 'sonarlint' then
+      --         -- Mason-lspconfig will recognize "sonarlint" as corresponding to
+      --         -- the installed "sonarlint-language-server".
+      --         -- The sonarlint.nvim plugin typically handles its setup directly,
+      --         -- so you might not need a full lspconfig.sonarlint.setup here.
+      --         -- Just ensuring this handler path exists is often enough.
+      --         return
+      --       end
+      --       -- ... default handler ...
+      --     end,
+      --   },
+      -- }
     end,
   },
 
@@ -772,7 +981,11 @@ require('lazy').setup({
         -- python = { "isort", "black" },
         --
         -- You can use 'stop_after_first' to run the first available formatter from the list
-        -- javascript = { "prettierd", "prettier", stop_after_first = true },
+        json = { 'prettierd', 'prettier', stop_after_first = true },
+        javascript = { 'prettierd', 'prettier', stop_after_first = true },
+        javascriptreact = { 'prettierd', 'prettier', stop_after_first = true },
+        typescript = { 'prettierd', 'prettier', stop_after_first = true },
+        typescriptreact = { 'prettierd', 'prettier', stop_after_first = true },
       },
     },
   },
@@ -975,7 +1188,7 @@ require('lazy').setup({
   --
   -- require 'kickstart.plugins.debug',
   -- require 'kickstart.plugins.indent_line',
-  -- require 'kickstart.plugins.lint',
+  require 'kickstart.plugins.lint',
   -- require 'kickstart.plugins.autopairs',
   -- require 'kickstart.plugins.neo-tree',
   -- require 'kickstart.plugins.gitsigns', -- adds gitsigns recommend keymaps
