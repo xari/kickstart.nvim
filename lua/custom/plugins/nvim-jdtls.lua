@@ -10,8 +10,7 @@ return {
     local config = {
       cmd = {
         -- 💀
-        -- '/opt/homebrew/Cellar/openjdk@21/21.0.9/libexec/openjdk.jdk/Contents/Home/bin/java',
-        '/Users/harry.anderson/.local/share/mise/installs/java/corretto-21.0.9.10.1/bin/java',
+        vim.fn.exepath 'java',
 
         '-Declipse.application=org.eclipse.jdt.ls.core.id1',
         '-Dosgi.bundles.defaultStartLevel=4',
@@ -27,12 +26,11 @@ return {
 
         -- 💀
         '-jar',
-        -- vim.fn.expand '$MASON/share/jdtls/plugins/org.eclipse.equinox.launcher_1.7.100.v20251014-1222.jar',
-        vim.fn.expand '$MASON/share/jdtls/plugins/org.eclipse.equinox.launcher_1.7.100.v20251111-0406.jar',
+        vim.fn.glob(vim.fn.expand '$MASON/share/jdtls/plugins/org.eclipse.equinox.launcher_*.jar'),
 
         -- 💀
         '-configuration',
-        vim.fn.expand '$MASON/share/jdtls/config/arm',
+        vim.fn.expand '$MASON/share/jdtls/config',
 
         -- 💀
         '-data',
@@ -43,24 +41,6 @@ return {
 
       settings = {
         java = {
-          configuration = {
-            runtimes = {
-              {
-                name = 'JavaSE-17',
-                -- path = '/opt/homebrew/Cellar/openjdk@17/17.0.17/libexec/openjdk.jdk/Contents/Home/',
-                path = vim.fn.expand '~/.local/share/mise/installs/java/17.0.2',
-                default = true,
-              },
-              -- {
-              --   name = 'JavaSE-21',
-              --   path = '/opt/homebrew/opt/openjdk@21/',
-              -- },
-              -- {
-              --   name = 'JavaSE-24',
-              --   path = '/opt/homebrew/opt/openjdk@24/',
-              -- },
-            },
-          },
           -- sources = {
           --   organizeImports = {
           --     importOrder = '/Users/harry.anderson/Projects/sonar-developer-toolset/eclipse/sonar.importorder',
@@ -68,8 +48,7 @@ return {
           -- },
           format = {
             settings = {
-              -- url = vim.fn.expand '~/Projects/sonar-developer-toolset/eclipse/sonar-formatter.xml',
-              url = '/Users/harry.anderson/Projects/sonar-developer-toolset/eclipse/sonar-formatter.xml',
+              url = vim.fn.expand '~/Projects/sonar-developer-toolset/eclipse/sonar-formatter.xml',
               -- profile = 'SonarQube',
             },
             -- options = {
